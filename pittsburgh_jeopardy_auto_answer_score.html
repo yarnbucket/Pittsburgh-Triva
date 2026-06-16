@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Pittsburgh Jeopardy - Zoom Edition</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:Arial,Helvetica,sans-serif; background:radial-gradient(circle at top,#1233ff 0%,#051061 45%,#02051e 100%); color:white; min-height:100vh; overflow:hidden; }
+  .screen{display:none;width:100vw;height:100vh;padding:28px}.active{display:block}
+  h1{text-align:center;color:#ffd54a;font-size:clamp(34px,5vw,72px);margin:10px 0 18px;text-shadow:4px 4px #000;letter-spacing:2px}
+  .sub{text-align:center;font-size:clamp(22px,2vw,34px);margin-bottom:28px}
+  .bigBtn,.resetBtn,.answerBtn{display:block;margin:18px auto;font-size:clamp(20px,2.6vw,38px);padding:14px 34px;border-radius:18px;border:4px solid #ffd54a;background:#0b2bd8;color:#ffd54a;cursor:pointer;box-shadow:0 8px 0 #000;font-weight:bold}
+  .resetBtn{position:fixed;bottom:12px;right:12px;font-size:18px;padding:10px 18px;z-index:11;margin:0}
+  .bottomBar{position:fixed;bottom:12px;left:12px;right:210px;display:flex;justify-content:center;align-items:center;z-index:10;pointer-events:none}
+  .totalScore{background:rgba(0,0,0,.62);border:3px solid #ffd54a;border-radius:14px;padding:10px 18px;font-size:clamp(20px,3vw,38px);font-weight:bold;color:#ffd54a;text-shadow:2px 2px #000;pointer-events:auto}
+  .board{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;height:calc(100vh - 190px);max-width:1500px;margin:0 auto 70px auto}
+  .cat,.clue{background:linear-gradient(#1235e8,#061a8f);border:4px solid #000;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:bold;text-shadow:2px 2px #000}
+  .cat{font-size:clamp(16px,2vw,30px);padding:8px;min-height:78px}.clue{color:#ffd54a;font-size:clamp(28px,5vw,66px);cursor:pointer}.used{background:#111;color:#333;cursor:not-allowed}
+  .questionBox{height:calc(100vh - 80px);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;max-width:1500px;margin:0 auto}
+  .valueTag{color:#ffd54a;font-size:clamp(30px,5vw,64px);font-weight:bold;text-shadow:3px 3px #000;margin-bottom:14px}
+  .questionText,.lockedText,.resultText{font-size:clamp(26px,4.5vw,64px);line-height:1.15;font-weight:bold;background:rgba(0,0,0,.28);border:6px solid #ffd54a;border-radius:22px;padding:26px;width:96%}
+  .lockedText{color:#ff6b6b}.resultText.correct{color:#5dff8b}.resultText.wrong{color:#ff6b6b}
+  .timer{margin-top:16px;font-size:clamp(54px,10vw,130px);color:#ffd54a;font-weight:900;text-shadow:5px 5px #000}
+  .answerArea{width:min(1000px,94vw);margin-top:12px;display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap}
+  #answerInput{flex:1;min-width:280px;font-size:clamp(22px,3vw,36px);padding:14px 18px;border-radius:14px;border:4px solid #ffd54a;text-align:center}
+  .answerBtn{margin:0;box-shadow:none;font-size:clamp(20px,2.6vw,32px)}
+  .smallHelp{position:fixed;bottom:65px;left:0;right:0;text-align:center;font-size:18px;opacity:.9;pointer-events:none}
+</style>
+</head>
+<body>
+<button class="resetBtn" onclick="resetGame()">RESET / RANDOMIZE</button>
+<div class="bottomBar"><div class="totalScore">TOTAL MONEY WON: $<span id="totalScore">0</span></div></div>
+<section id="start" class="screen active"><h1>PITTSBURGH JEOPARDY</h1><div class="sub">Zoom Plug-and-Play Edition</div><button class="bigBtn" onclick="showBoard()">START GAME</button><div class="sub">Type your answer. 15-second timer. If time runs out, the answer is locked.</div></section>
+<section id="board" class="screen"><h1>PITTSBURGH JEOPARDY</h1><div class="board" id="gameBoard"></div><div class="smallHelp">Click a dollar amount. Correct answers add money automatically.</div></section>
+<section id="question" class="screen"><div class="questionBox"><div class="valueTag" id="qValue"></div><div class="questionText" id="qText"></div><div class="timer" id="timer">15</div><div class="answerArea"><input id="answerInput" type="text" placeholder="Type answer here..." autocomplete="off"/><button class="answerBtn" id="submitBtn" onclick="checkAnswer()">SUBMIT ANSWER</button></div></div><div class="smallHelp">Jeopardy-style answers accepted: “Who is…”, “What is…”, or just the name/thing.</div></section>
+<section id="result" class="screen"><div class="questionBox"><div class="valueTag" id="rValue"></div><div class="resultText" id="rText"></div><button class="bigBtn" onclick="backToBoard()">BACK TO BOARD</button></div></section>
+<section id="locked" class="screen"><div class="questionBox"><div class="valueTag">TIME IS UP</div><div class="lockedText">No answer revealed.<br><br>That clue is now closed.</div><button class="bigBtn" onclick="backToBoard()">BACK TO BOARD</button></div></section>
+<script>
+const baseClues=[
+{cat:"PITTSBURGH PEOPLE",val:100,q:"This beloved Pittsburgh TV personality answered every letter sent by a child.",a:"Who is Fred Rogers?",aliases:["fred rogers","mister rogers","mr rogers","fred mcfeely rogers"]},
+{cat:"PITTSBURGH PEOPLE",val:200,q:"This Pittsburgh-born Negro League superstar became the first African American inducted into the Baseball Hall of Fame.",a:"Who is Josh Gibson?",aliases:["josh gibson","gibson"]},
+{cat:"PITTSBURGH PEOPLE",val:300,q:"This Pittsburgh engineer gave his name to a famous amusement ride but died before seeing its success.",a:"Who is George Washington Gale Ferris Jr.?",aliases:["george washington gale ferris jr","george ferris","ferris","g w g ferris","george washington ferris"]},
+{cat:"PITTSBURGH PEOPLE",val:400,q:"Dr. Thomas Starzl became world famous for pioneering this organ transplant.",a:"What is a liver transplant?",aliases:["liver transplant","liver","liver transplantation"]},
+{cat:"PITTSBURGH PEOPLE",val:500,q:"This artist made Pittsburgh famous for pop art, soup cans, and celebrity portraits.",a:"Who is Andy Warhol?",aliases:["andy warhol","warhol"]},
+{cat:"CITY FACTS",val:100,q:"The Allegheny and Monongahela Rivers meet to form this river.",a:"What is the Ohio River?",aliases:["ohio river","ohio"]},
+{cat:"CITY FACTS",val:200,q:"This overlook neighborhood gives one of the best skyline views of Pittsburgh.",a:"What is Mount Washington?",aliases:["mount washington","mt washington"]},
+{cat:"CITY FACTS",val:300,q:"Pittsburgh is famously known as the City of these.",a:"What are bridges?",aliases:["bridges","bridge"]},
+{cat:"CITY FACTS",val:400,q:"Mayor David Lawrence helped launch Pittsburgh's fight against this pollution problem.",a:"What is dirty air / air pollution?",aliases:["dirty air","air pollution","clean air","smog","pollution"]},
+{cat:"CITY FACTS",val:500,q:"This Pittsburgh park is home to Phipps Conservatory.",a:"What is Schenley Park?",aliases:["schenley park","schenley"]},
+{cat:"SPORTS",val:100,q:"These three Pittsburgh teams are known for black and gold.",a:"Who are the Steelers, Pirates, and Penguins?",aliases:["steelers pirates penguins","pirates steelers penguins","penguins pirates steelers","steelers penguins pirates"]},
+{cat:"SPORTS",val:200,q:"The Steelers have won this many Super Bowls.",a:"What is six?",aliases:["six","6"]},
+{cat:"SPORTS",val:300,q:"This Pirates legend wore number 21.",a:"Who is Roberto Clemente?",aliases:["roberto clemente","clemente"]},
+{cat:"SPORTS",val:400,q:"The Penguins play home games in this arena.",a:"What is PPG Paints Arena?",aliases:["ppg paints arena","ppg arena","paint arena"]},
+{cat:"SPORTS",val:500,q:"This Steelers coach won four Super Bowls in the 1970s.",a:"Who is Chuck Noll?",aliases:["chuck noll","noll"]},
+{cat:"FOOD & FUN",val:100,q:"This sandwich shop is famous for putting fries on the sandwich.",a:"What is Primanti Brothers?",aliases:["primanti brothers","primantis","primanti bros","primanti"]},
+{cat:"FOOD & FUN",val:200,q:"This Kennywood coaster shares its name with a Pittsburgh revenge phrase.",a:"What is the Steel Curtain?",aliases:["steel curtain"]},
+{cat:"FOOD & FUN",val:300,q:"This Pittsburgh neighborhood is famous for nightlife on East Carson Street.",a:"What is the South Side?",aliases:["south side","southside"]},
+{cat:"FOOD & FUN",val:400,q:"This Strip District market area is famous for food, shops, and Steelers gear.",a:"What is the Strip District?",aliases:["strip district","the strip"]},
+{cat:"FOOD & FUN",val:500,q:"This local term means a nosy person who gets into everyone else's business.",a:"What is a nebby person?",aliases:["nebby","nebby person"]},
+{cat:"YINZER TALK",val:100,q:"In Pittsburgh, this word can mean you all, you guys, or everyone.",a:"What is yinz?",aliases:["yinz","yunz","youins","youns"]},
+{cat:"YINZER TALK",val:200,q:"A Pittsburgher may say this when telling someone to clean up a messy room.",a:"What is redd up?",aliases:["redd up","red up","redd","red"]},
+{cat:"YINZER TALK",val:300,q:"This Pittsburgh word means slippery.",a:"What is slippy?",aliases:["slippy"]},
+{cat:"YINZER TALK",val:400,q:"This Pittsburgh phrase means the downtown area.",a:"What is dahntahn?",aliases:["dahntahn","downtown","down town"]},
+{cat:"YINZER TALK",val:500,q:"This Pittsburgh insult is often used for someone acting foolish.",a:"What is jagoff?",aliases:["jagoff","jag off"]}
+];
+let clues=[],categories=["PITTSBURGH PEOPLE","CITY FACTS","SPORTS","FOOD & FUN","YINZER TALK"],current=null,currentValue=100,timerInterval=null,timeExpired=false,totalScore=0;
+function normalize(text){return String(text||"").toLowerCase().replace(/[’']/g,"").replace(/&/g," and ").replace(/[^\w\s]/g," ").replace(/\b(who|what|where|when|why|how|is|are|was|were|the|a|an|this|that)\b/g," ").replace(/\bjr\b/g,"junior").replace(/\s+/g," ").trim()}
+function isCorrect(userAnswer,clue){const u=normalize(userAnswer);if(!u)return false;const accepted=[clue.a,...(clue.aliases||[])].map(normalize);if(accepted.some(ans=>u===ans||u.includes(ans)||ans.includes(u)))return true;if(clue.a.includes("Steelers, Pirates, and Penguins"))return ["steelers","pirates","penguins"].every(t=>u.includes(t));return false}
+function shuffle(array){const copy=[...array];for(let i=copy.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[copy[i],copy[j]]=[copy[j],copy[i]]}return copy}
+function setupRandomizedGame(){clues=shuffle(baseClues).map((c,i)=>({...c,cat:categories[Math.floor(i/5)],val:[100,200,300,400,500][i%5],used:false}))}
+function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active')}
+function showBoard(){if(clues.length===0)setupRandomizedGame();buildBoard();show('board')}
+function buildBoard(){const board=document.getElementById('gameBoard');board.innerHTML="";categories.forEach(cat=>{const div=document.createElement('div');div.className='cat';div.textContent=cat;board.appendChild(div)});[100,200,300,400,500].forEach(val=>{categories.forEach(cat=>{const clue=clues.find(c=>c.cat===cat&&c.val===val);const div=document.createElement('div');div.className=clue.used?'clue used':'clue';div.textContent=clue.used?'':'$'+val;if(!clue.used)div.onclick=()=>openClue(clue);board.appendChild(div)})})}
+function openClue(clue){current=clue;currentValue=clue.val;timeExpired=false;document.getElementById('qValue').textContent='$'+clue.val;document.getElementById('qText').textContent=clue.q;document.getElementById('timer').textContent='15';const input=document.getElementById('answerInput');input.value='';document.getElementById('submitBtn').disabled=false;document.getElementById('submitBtn').style.opacity='1';show('question');setTimeout(()=>input.focus(),100);startTimer()}
+function beep(freq=800,duration=120){try{const AudioCtx=window.AudioContext||window.webkitAudioContext;const ctx=new AudioCtx();const osc=ctx.createOscillator();const gain=ctx.createGain();osc.connect(gain);gain.connect(ctx.destination);osc.frequency.value=freq;osc.type='square';gain.gain.value=.08;osc.start();setTimeout(()=>{osc.stop();ctx.close()},duration)}catch(e){}}
+function startTimer(){clearInterval(timerInterval);let count=15;beep(650,100);timerInterval=setInterval(()=>{count--;document.getElementById('timer').textContent=count;if(count>0){if(count<=5)beep(700,120)}else{beep(250,600);clearInterval(timerInterval);timeExpired=true;document.getElementById('timer').textContent='TIME!';document.getElementById('submitBtn').disabled=true;document.getElementById('submitBtn').style.opacity='.35';if(current)current.used=true;setTimeout(()=>show('locked'),700)}},1000)}
+function checkAnswer(){if(timeExpired||!current)return;const guess=document.getElementById('answerInput').value;if(!guess.trim())return;clearInterval(timerInterval);current.used=true;const correct=isCorrect(guess,current);const rText=document.getElementById('rText');document.getElementById('rValue').textContent='$'+current.val;if(correct){totalScore+=current.val;document.getElementById('totalScore').textContent=totalScore;rText.className='resultText correct';rText.innerHTML='CORRECT!<br><br>Accepted answer:<br>'+current.a+'<br><br>Money won: $'+current.val;beep(900,150);setTimeout(()=>beep(1100,150),160)}else{rText.className='resultText wrong';rText.innerHTML='INCORRECT<br><br>Your answer:<br>'+escapeHtml(guess)+'<br><br>Correct answer:<br>'+current.a;beep(250,450)}show('result')}
+function escapeHtml(text){return String(text).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'})[m])}
+function backToBoard(){clearInterval(timerInterval);buildBoard();show('board')}
+function resetGame(){clearInterval(timerInterval);setupRandomizedGame();totalScore=0;document.getElementById('totalScore').textContent='0';current=null;currentValue=100;buildBoard();show('board')}
+document.addEventListener('keydown',e=>{if(e.code==='Enter'&&document.getElementById('question').classList.contains('active'))checkAnswer();if(e.code==='Escape'){e.preventDefault();backToBoard()}});
+</script>
+</body>
+</html>
